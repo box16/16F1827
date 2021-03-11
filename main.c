@@ -49,12 +49,6 @@ enum TYPE
     command = 0x00
 };
 
-enum ACK
-{
-    recived = 0,
-    not_recived = 1
-};
-
 void createStartCondition()
 {
     SSP1CON2bits.SEN = 1;
@@ -78,20 +72,21 @@ void send8bitData(unsigned char data)
     return;
 }
 
-bool checkACK()
+void waitReceivedACK()
 {
     // 0:received 1:not_recieved
-    return SSP1CON2bits.ACKSTAT; 
+    while (SSP1CON2bits.ACKSTAT == 1){}
+    return; 
 }
 
-void writeLCDByte(unsigned char data)
+void write1602AFormatByte(unsigned char data)
 {
     send8bitData(data);
-    while(checkACK()==not_recived){}
+    waitReceivedACK();
     send8bitData(data | 0x04);
-    while(checkACK()==not_recived){}
+    waitReceivedACK();
     send8bitData(data & 0xFB);
-    while(checkACK()==not_recived){}
+    waitReceivedACK();
 }
 
 void LCD1602AProtocol(unsigned char type,unsigned char data)
@@ -101,12 +96,12 @@ void LCD1602AProtocol(unsigned char type,unsigned char data)
     
     //address
     send8bitData(0x27<<1);
-    while(checkACK()==not_recived){}
+    waitReceivedACK();
     
     //4bit upper data
-    writeLCDByte(type | (data&0xF0) | 0x08);
+    write1602AFormatByte(type | (data&0xF0) | 0x08);
     //4bit lower data
-    writeLCDByte(type | ((data<<4)&0xF0) | 0x08);
+    write1602AFormatByte(type | ((data<<4)&0xF0) | 0x08);
     
     //stop condition
     createStopCondition();
@@ -156,10 +151,19 @@ int main(int argc, char** argv)
     
     __delay_ms(1000);
     lcdInit();
-    showMessage("Hello",first);
-    showMessage("World",second);
-    __delay_ms(10000);
-    showMessage("Inoue",first);
-    showMessage("Taichi",second);
-    __delay_ms(10000);
+    while(true)
+    {
+        showMessage("Hello",first);
+        showMessage("World",second);
+        __delay_ms(10000);
+        lcdInit();
+        showMessage("Inoue",first);
+        showMessage("Taichi",second);
+        __delay_ms(10000);
+        lcdInit();
+        showMessage("GoodMorning",first);
+        showMessage("Japan",second);
+        __delay_ms(10000);
+        lcdInit();
+    }
 }
