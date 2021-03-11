@@ -157,10 +157,6 @@ int main(int argc, char** argv)
         showMessage("World",second);
         __delay_ms(10000);
         lcdInit();
-        showMessage("Inoue",first);
-        showMessage("Taichi",second);
-        __delay_ms(10000);
-        lcdInit();
         showMessage("GoodMorning",first);
         showMessage("Japan",second);
         __delay_ms(10000);
