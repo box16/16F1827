@@ -49,6 +49,32 @@ enum TYPE
     command = 0x00
 };
 
+enum R_W
+{
+    read = 0x01,
+    write = 0x00
+};
+
+enum number
+{
+    zero = 0x30,
+    one = 0x31,
+    two = 0x32,
+    three = 0x33,
+    four = 0x34,
+    five = 0x35,
+    six = 0x36,
+    seven = 0x37,
+    eight = 0x38,
+    nine = 0x39,
+    ten = 0x41,
+    eleven = 0x42,
+    twelve = 0x43,
+    thirteen = 0x44,
+    fourteen = 0x45,
+    fifteen = 0x46
+};
+
 void createStartCondition()
 {
     SSP1CON2bits.SEN = 1;
@@ -72,6 +98,31 @@ void send8bitData(unsigned char data)
     return;
 }
 
+unsigned char receive8bitData()
+{
+    SSP1CON2bits.RCEN = 1;
+    while(SSP1CON2bits.RCEN == 1){}
+    unsigned char data = SSP1BUF;
+
+    return data;
+}
+
+void waitSendACK()
+{
+    SSP1CON2bits.ACKDT = 0;
+    SSP1CON2bits.ACKEN = 1;
+    while(SSP1CON2bits.ACKEN== 1){}
+    return;
+}
+
+void waitSendNACK()
+{
+    SSP1CON2bits.ACKDT = 1;
+    SSP1CON2bits.ACKEN = 1;
+    while(SSP1CON2bits.ACKEN== 1){}
+    return;
+}
+
 void waitReceivedACK()
 {
     // 0:received 1:not_recieved
@@ -89,13 +140,132 @@ void write1602AFormatByte(unsigned char data)
     waitReceivedACK();
 }
 
+void SHT31Protocol(unsigned short *row_data)//16bit 2data in.
+{
+    //start condition
+    createStartCondition();
+
+    //address
+    send8bitData(0x45<<1 | write);
+    waitReceivedACK();
+
+    //command
+    send8bitData(0x2C);
+    waitReceivedACK();
+
+    //command
+    send8bitData(0x06);
+    waitReceivedACK();
+
+    //stop condition
+    createStopCondition();
+
+    //start condition
+    createStartCondition();
+    
+    // address
+    send8bitData(0x45<<1 | read);
+    waitReceivedACK();
+
+    //receive temp 16bit
+    row_data[0] = 0;
+    row_data[0] |= receive8bitData();
+    row_data[0] = row_data[0]<<8;
+    waitSendACK();
+    row_data[0] |= receive8bitData();
+    waitSendACK();
+
+    //receive check sum
+    receive8bitData();
+    waitSendACK();
+
+    //receive humi 16bit
+    row_data[1] = 0;
+    row_data[1] |= receive8bitData();
+    row_data[1] = row_data[1]<<8;
+    waitSendACK();
+    row_data[1] |= receive8bitData();
+    waitSendACK();
+
+    //receive check sum
+    receive8bitData();
+    waitSendNACK();
+
+    //stop condition
+    createStopCondition();
+    return;
+}
+
+unsigned short calcDiv(unsigned short coef,unsigned short row_data)
+{
+    unsigned short current = coef;
+    unsigned short i=0;
+    unsigned short result = 0;
+    while(i<16)
+    {
+        current = current >> 1;
+        if((row_data<<i) & 0x8000)
+        {
+            result += current;
+        }
+        i++;
+    }
+    return result;
+}
+
+void convertNumber(unsigned char number,unsigned char *result,unsigned int start_index)
+{
+    result[start_index] = zero;
+    result[start_index+1] = zero;
+    switch (number>>4)
+    {
+        case 0x0: result[start_index]=zero; break;
+        case 0x1: result[start_index]=one; break;
+        case 0x2: result[start_index]=two; break;
+        case 0x3: result[start_index]=three; break;
+        case 0x4: result[start_index]=four; break;
+        case 0x5: result[start_index]=five; break;
+        case 0x6: result[start_index]=six; break;
+        case 0x7: result[start_index]=seven; break;
+        case 0x8: result[start_index]=eight; break;
+        case 0x9: result[start_index]=nine; break;
+        case 0xA: result[start_index]=ten; break;
+        case 0xB: result[start_index]=eleven; break;
+        case 0xC: result[start_index]=twelve; break;
+        case 0xD: result[start_index]=thirteen; break;
+        case 0xE: result[start_index]=fourteen; break;
+        case 0xF: result[start_index]=fifteen; break;
+    }
+
+    switch (number&0x0F)
+    {
+        case 0x0: result[start_index+1]=zero; break;
+        case 0x1: result[start_index+1]=one; break;
+        case 0x2: result[start_index+1]=two; break;
+        case 0x3: result[start_index+1]=three; break;
+        case 0x4: result[start_index+1]=four; break;
+        case 0x5: result[start_index+1]=five; break;
+        case 0x6: result[start_index+1]=six; break;
+        case 0x7: result[start_index+1]=seven; break;
+        case 0x8: result[start_index+1]=eight; break;
+        case 0x9: result[start_index+1]=nine; break;
+        case 0xA: result[start_index+1]=ten; break;
+        case 0xB: result[start_index+1]=eleven; break;
+        case 0xC: result[start_index+1]=twelve; break;
+        case 0xD: result[start_index+1]=thirteen; break;
+        case 0xE: result[start_index+1]=fourteen; break;
+        case 0xF: result[start_index+1]=fifteen; break;
+    }
+    return;
+}
+
 void LCD1602AProtocol(unsigned char type,unsigned char data)
 {
     //start condition
     createStartCondition();
     
     //address
-    send8bitData(0x27<<1);
+    send8bitData(0x27<<1 | write);
     waitReceivedACK();
     
     //4bit upper data
@@ -125,12 +295,14 @@ void lcdInit()
     __delay_ms(1);
 }
 
-void showMessage(const char* message,unsigned char line_address)
+void showMessage(const char* message,unsigned char line_address,int last_index)
 {
     LCD1602AProtocol(command,line_address);
-    while(*message)
+    int i=0;
+    while(i < last_index+1)
     {
-        LCD1602AProtocol(data,*message++);
+        LCD1602AProtocol(data,message[i]);
+        i++;
     }
 }
 
@@ -151,14 +323,28 @@ int main(int argc, char** argv)
     
     __delay_ms(1000);
     lcdInit();
+
+    unsigned short temp_humi[2] = {};
+    unsigned char temp = 0x00;
+    unsigned char humi = 0x00;
+    // 16'C 22%
+    unsigned char status[8] = {};
+    status[2] = 0xDF;
+    status[3] = 0x43;
+    status[4] = 0x20;
+    status[7] = 0x25;
+
     while(true)
     {
-        showMessage("Hello",first);
-        showMessage("World",second);
-        __delay_ms(10000);
-        lcdInit();
-        showMessage("GoodMorning",first);
-        showMessage("Japan",second);
+        SHT31Protocol(temp_humi);
+        
+        temp = -45 + calcDiv(175,temp_humi[0]);
+        convertNumber(temp,status,0);        
+        humi = calcDiv(100,temp_humi[1]);
+        convertNumber(humi,status,5);
+
+        showMessage(status,first,7);
+        
         __delay_ms(10000);
         lcdInit();
     }
