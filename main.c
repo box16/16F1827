@@ -66,12 +66,6 @@ enum number
     seven = 0x37,
     eight = 0x38,
     nine = 0x39,
-    ten = 0x41,
-    eleven = 0x42,
-    twelve = 0x43,
-    thirteen = 0x44,
-    fourteen = 0x45,
-    fifteen = 0x46
 };
 
 //I2C Protocol
@@ -212,120 +206,108 @@ enum number
     }
 //} 1602A
 
+//SHT31{
+    void i2cSHT31(unsigned short *temp_humi)
+    {
+        sendStartCondition();
 
-void SHT31Protocol(unsigned short *temp_humi)
+        //address
+        send8bitData(0x45<<1 | write);
+        waitReceivedACK();
+
+        //Clock stretch
+        //On : 0x2C 
+        //Off : 0x24
+        send8bitData(0x2C);
+        waitReceivedACK();
+
+        //Repeat accuracy
+        //6 pattern
+        send8bitData(0x06);
+        waitReceivedACK();
+
+        sendStopCondition();
+
+        sendStartCondition();
+        
+        // address
+        send8bitData(0x45<<1 | read);
+        waitReceivedACK();
+
+        //Receives 16 bits of temperature data.
+        temp_humi[0] = 0;
+        temp_humi[0] |= receive8bitData() << 8;
+        waitSendACK();
+        temp_humi[0] |= receive8bitData();
+        waitSendACK();
+
+        //receive check sum
+        receive8bitData();
+        waitSendACK();
+
+        //Receives 16 bits of humidity data.
+        temp_humi[1] = 0;
+        temp_humi[1] |= receive8bitData() << 8;
+        waitSendACK();
+        temp_humi[1] |= receive8bitData();
+        waitSendACK();
+
+        //receive check sum
+        receive8bitData();
+        waitSendNACK();
+
+        sendStopCondition();
+        return;
+    }
+
+    unsigned short calcDiv(unsigned short coef,unsigned short row_data)
+    {
+        // Calculate -> coef*row_data/(2^16-1)
+        unsigned short result = 0;
+
+        for (unsigned char i=0; i<16; i++)
+        {
+            coef = coef >> 1;
+            if((row_data<<i) & 0x8000) result += coef;
+        }
+
+        return result;
+    }
+//}SHT31
+
+unsigned char convertNumberto1602ACode(const unsigned char number)
 {
-    sendStartCondition();
+    switch (number)
+    {
+        case 0x0: return zero;
+        case 0x1: return one;
+        case 0x2: return two;
+        case 0x3: return three;
+        case 0x4: return four;
+        case 0x5: return five;
+        case 0x6: return six;
+        case 0x7: return seven;
+        case 0x8: return eight;
+        case 0x9: return nine;
+        default: return 0xFF;
+    }
+} 
 
-    //address
-    send8bitData(0x45<<1 | write);
-    waitReceivedACK();
+void convert2DigitNumber(unsigned char number,
+                         unsigned char *result,
+                         const unsigned int start_index)
+{
+    unsigned char carry_10 = 0x00;
+    while(number > 10)
+    {
+        number -= 10;
+        carry_10++;
+    }
 
-    //Clock stretch
-    //On : 0x2C 
-    //Off : 0x24
-    send8bitData(0x2C);
-    waitReceivedACK();
-
-    //Repeat accuracy
-    //6 pattern
-    send8bitData(0x06);
-    waitReceivedACK();
-
-    sendStopCondition();
-
-    sendStartCondition();
-    
-    // address
-    send8bitData(0x45<<1 | read);
-    waitReceivedACK();
-
-    //Receives 16 bits of temperature data.
-    temp_humi[0] = 0;
-    temp_humi[0] |= receive8bitData() << 8;
-    waitSendACK();
-    temp_humi[0] |= receive8bitData();
-    waitSendACK();
-
-    //receive check sum
-    receive8bitData();
-    waitSendACK();
-
-    //Receives 16 bits of humidity data.
-    temp_humi[1] = 0;
-    temp_humi[1] |= receive8bitData() << 8;
-    waitSendACK();
-    temp_humi[1] |= receive8bitData();
-    waitSendACK();
-
-    //receive check sum
-    receive8bitData();
-    waitSendNACK();
-
-    sendStopCondition();
+    result[start_index] = convertNumberto1602ACode(carry_10);
+    result[start_index+1] = convertNumberto1602ACode(number);
     return;
 }
-
-unsigned short calcDiv(unsigned short coef,unsigned short row_data)
-{
-    // Calculate -> coef*row_data/(2^16-1)
-    unsigned short result = 0;
-
-    for (unsigned char i=0; i<16; i++)
-    {
-        coef = coef >> 1;
-        if((row_data<<i) & 0x8000) result += coef;
-    }
-
-    return result;
-}
-
-void convertNumber(unsigned char number,unsigned char *result,unsigned int start_index)
-{
-    result[start_index] = zero;
-    result[start_index+1] = zero;
-    switch (number>>4)
-    {
-        case 0x0: result[start_index]=zero; break;
-        case 0x1: result[start_index]=one; break;
-        case 0x2: result[start_index]=two; break;
-        case 0x3: result[start_index]=three; break;
-        case 0x4: result[start_index]=four; break;
-        case 0x5: result[start_index]=five; break;
-        case 0x6: result[start_index]=six; break;
-        case 0x7: result[start_index]=seven; break;
-        case 0x8: result[start_index]=eight; break;
-        case 0x9: result[start_index]=nine; break;
-        case 0xA: result[start_index]=ten; break;
-        case 0xB: result[start_index]=eleven; break;
-        case 0xC: result[start_index]=twelve; break;
-        case 0xD: result[start_index]=thirteen; break;
-        case 0xE: result[start_index]=fourteen; break;
-        case 0xF: result[start_index]=fifteen; break;
-    }
-
-    switch (number&0x0F)
-    {
-        case 0x0: result[start_index+1]=zero; break;
-        case 0x1: result[start_index+1]=one; break;
-        case 0x2: result[start_index+1]=two; break;
-        case 0x3: result[start_index+1]=three; break;
-        case 0x4: result[start_index+1]=four; break;
-        case 0x5: result[start_index+1]=five; break;
-        case 0x6: result[start_index+1]=six; break;
-        case 0x7: result[start_index+1]=seven; break;
-        case 0x8: result[start_index+1]=eight; break;
-        case 0x9: result[start_index+1]=nine; break;
-        case 0xA: result[start_index+1]=ten; break;
-        case 0xB: result[start_index+1]=eleven; break;
-        case 0xC: result[start_index+1]=twelve; break;
-        case 0xD: result[start_index+1]=thirteen; break;
-        case 0xE: result[start_index+1]=fourteen; break;
-        case 0xF: result[start_index+1]=fifteen; break;
-    }
-    return;
-}
-
 
 
 int main(int argc, char** argv) 
@@ -350,7 +332,7 @@ int main(int argc, char** argv)
     char temp = 0x00;
     unsigned char humi = 0x00;
     
-    // Display exsample → |2|0|'|C| |5|0|%| 
+    // Display exsample -> |2|0|'|C| |5|0|%| 
     unsigned char display_char[8] = {};
     display_char[2] = 0xDF;//'
     display_char[3] = 0x43;//C
@@ -359,13 +341,13 @@ int main(int argc, char** argv)
 
     while(1)
     {
-        SHT31Protocol(temp_humi);
+        i2cSHT31(temp_humi);
         
         temp = -45 + (char)calcDiv(175,temp_humi[0]);
-        convertNumber(temp,display_char,0);        
+        convert2DigitNumber(temp,display_char,0);        
         
-        humi = (unsigned)calcDiv(100,temp_humi[1]);
-        convertNumber(humi,display_char,5);
+        humi = (unsigned char)calcDiv(100,temp_humi[1]);
+        convert2DigitNumber(humi,display_char,5);
 
         showMessage(display_char,first,7);
         
