@@ -94,7 +94,7 @@ enum number
         return;
     }
 
-    void send8bitData(unsigned char data)
+    void send8bitData(const unsigned char data)
     {
         // If you put data in SSP1BUF, it will be sent automatically.
         // When the transmission is completed, SSP1IF becomes 1.
@@ -147,6 +147,71 @@ enum number
         return; 
     }
 //} I2C Protocol
+
+// 1602A {
+    void i2c1602A(const unsigned char type,
+                  const unsigned char data)
+    {
+        sendStartCondition();
+        
+        //address
+        send8bitData(0x27<<1 | write);
+        waitReceivedACK();
+        
+        unsigned char latch = 0x00;
+
+        //4bit upper data
+        latch = type | (data&0xF0) | 0x08;
+        send8bitData(latch);
+        waitReceivedACK();
+        send8bitData(latch | 0x04);
+        waitReceivedACK();
+        send8bitData(latch & 0xFB);
+        waitReceivedACK();
+        
+        latch = type | ((data<<4)&0xF0) | 0x08;
+        //4bit lower data
+        send8bitData(latch);
+        waitReceivedACK();
+        send8bitData(latch | 0x04);
+        waitReceivedACK();
+        send8bitData(latch & 0xFB);
+        waitReceivedACK();
+        
+        createStopCondition();
+
+        return;
+    }
+
+    void lcdInit()
+    {
+        i2c1602A(command,0x33);
+        __delay_ms(5);
+        i2c1602A(command,0x32);
+        __delay_ms(1);
+        i2c1602A(command,0x06);
+        __delay_ms(1);
+        i2c1602A(command,0x0C);
+        __delay_ms(1);
+        i2c1602A(command,0x28);
+        __delay_ms(1);
+        i2c1602A(command,0x01);
+        __delay_ms(1);
+    }
+
+    void showMessage(const unsigned char* message,
+                     const unsigned char line_address,
+                     const unsigned char last_index)
+    {
+        i2c1602A(command,line_address);
+        unsigned char i=0;
+        for (unsigned char i=0; i < last_index+1; i++)
+        {
+            i2c1602A(data,message[i]);
+        }
+    }
+//} 1602A
+
 
 void SHT31Protocol(unsigned short *row_data)//16bit 2data in.
 {
@@ -267,65 +332,7 @@ void convertNumber(unsigned char number,unsigned char *result,unsigned int start
     return;
 }
 
-void i2c1602A(unsigned char type,unsigned char data)
-{
-    sendStartCondition();
-    
-    //address
-    send8bitData(0x27<<1 | write);
-    waitReceivedACK();
-    
-    unsigned char latch = 0x00;
 
-    //4bit upper data
-    latch = type | (data&0xF0) | 0x08;
-    send8bitData(latch);
-    waitReceivedACK();
-    send8bitData(latch | 0x04);
-    waitReceivedACK();
-    send8bitData(latch & 0xFB);
-    waitReceivedACK();
-    
-    latch = type | ((data<<4)&0xF0) | 0x08;
-    //4bit lower data
-    send8bitData(latch);
-    waitReceivedACK();
-    send8bitData(latch | 0x04);
-    waitReceivedACK();
-    send8bitData(latch & 0xFB);
-    waitReceivedACK();
-    
-    createStopCondition();
-
-    return;
-}
-
-void lcdInit()
-{
-    i2c1602A(command,0x33);
-    __delay_ms(5);
-    i2c1602A(command,0x32);
-    __delay_ms(1);
-    i2c1602A(command,0x06);
-    __delay_ms(1);
-    i2c1602A(command,0x0C);
-    __delay_ms(1);
-    i2c1602A(command,0x28);
-    __delay_ms(1);
-    i2c1602A(command,0x01);
-    __delay_ms(1);
-}
-
-void showMessage(const char* message,unsigned char line_address,int last_index)
-{
-    i2c1602A(command,line_address);
-    int i=0;
-    while(i < last_index+1)
-    {
-        i2c1602A(data,message[i]);
-        i++;
-    }
-}
 
 int main(int argc, char** argv) 
 {
