@@ -74,86 +74,79 @@ enum number
     fifteen = 0x46
 };
 
-void sendStartCondition()
-{
-    // When SEN is set to 1, the start condition generation starts.
-    // Automatically becomes 0 when transmission is completed.
-    SSP1CON2bits.SEN = 1;
-    while(SSPCON2bits.SEN == 1){}
-    return;
-}
+//I2C Protocol
+//{
+    void sendStartCondition()
+    {
+        // When SEN is set to 1, the start condition generation starts.
+        // Automatically becomes 0 when transmission is completed.
+        SSP1CON2bits.SEN = 1;
+        while(SSPCON2bits.SEN == 1){}
+        return;
+    }
 
-void createStopCondition()
-{
-    // When PEN is set to 1, the stop condition generation starts.
-    // Automatically becomes 0 when transmission is completed.
-    SSP1CON2bits.PEN = 1;
-    while(SSP1CON2bits.PEN == 1){}
-    return;
-}
+    void createStopCondition()
+    {
+        // When PEN is set to 1, the stop condition generation starts.
+        // Automatically becomes 0 when transmission is completed.
+        SSP1CON2bits.PEN = 1;
+        while(SSP1CON2bits.PEN == 1){}
+        return;
+    }
 
-void send8bitData(unsigned char data)
-{
-    // If you put data in SSP1BUF, it will be sent automatically.
-    // When the transmission is completed, SSP1IF becomes 1.
-    SSP1IF = 0;
-    SSP1BUF = data;
-    while(SSP1IF == 0){}
-    SSP1IF = 0;
-    return;
-}
+    void send8bitData(unsigned char data)
+    {
+        // If you put data in SSP1BUF, it will be sent automatically.
+        // When the transmission is completed, SSP1IF becomes 1.
+        SSP1IF = 0;
+        SSP1BUF = data;
+        while(SSP1IF == 0){}
+        SSP1IF = 0;
+        return;
+    }
 
-unsigned char receive8bitData()
-{
-    // Data reception starts when RCEN is set to 1.
-    // RCEN becomes 0 when data reception is completed.
-    // Received data is saved in SSP1BUF.
-    SSP1CON2bits.RCEN = 1;
-    while(SSP1CON2bits.RCEN == 1){}
+    unsigned char receive8bitData()
+    {
+        // Data reception starts when RCEN is set to 1.
+        // RCEN becomes 0 when data reception is completed.
+        // Received data is saved in SSP1BUF.
+        SSP1CON2bits.RCEN = 1;
+        while(SSP1CON2bits.RCEN == 1){}
 
-    return SSP1BUF;
-}
+        return SSP1BUF;
+    }
 
-void waitSendACK()
-{
-    // When ACKDT is set to 0, the generation of ACK signal is set.
-    // By setting ACKEN to 1, the signal is transmitted according to the ACKDT setting.
-    // ACKEN automatically becomes 0 when the signal transmission is completed.
-    SSP1CON2bits.ACKDT = 0;
-    SSP1CON2bits.ACKEN = 1;
-    while(SSP1CON2bits.ACKEN == 1){}
-    return;
-}
+    void waitSendACK()
+    {
+        // When ACKDT is set to 0, the generation of ACK signal is set.
+        // By setting ACKEN to 1, the signal is transmitted according to the ACKDT setting.
+        // ACKEN automatically becomes 0 when the signal transmission is completed.
+        SSP1CON2bits.ACKDT = 0;
+        SSP1CON2bits.ACKEN = 1;
+        while(SSP1CON2bits.ACKEN == 1){}
+        return;
+    }
 
-void waitSendNACK()
-{
-    // When ACKDT is set to 1, the generation of NACK signal is set.
-    // By setting ACKEN to 1, the signal is transmitted according to the ACKDT setting.
-    // ACKEN automatically becomes 0 when the signal transmission is completed.
-    SSP1CON2bits.ACKDT = 1;
-    SSP1CON2bits.ACKEN = 1;
-    while(SSP1CON2bits.ACKEN == 1){}
-    return;
-}
+    void waitSendNACK()
+    {
+        // When ACKDT is set to 1, the generation of NACK signal is set.
+        // By setting ACKEN to 1, the signal is transmitted according to the ACKDT setting.
+        // ACKEN automatically becomes 0 when the signal transmission is completed.
+        SSP1CON2bits.ACKDT = 1;
+        SSP1CON2bits.ACKEN = 1;
+        while(SSP1CON2bits.ACKEN == 1){}
+        return;
+    }
 
-void waitReceivedACK()
-{
-    // ACKSTAT contains whether the ACK signal from the receiving side has been received.
-    // Received at 0. 
-    // Not received at 1.
-    while (SSP1CON2bits.ACKSTAT == 1){}
-    return; 
-}
-
-void write1602AFormatByte(unsigned char data)
-{
-    send8bitData(data);
-    waitReceivedACK();
-    send8bitData(data | 0x04);
-    waitReceivedACK();
-    send8bitData(data & 0xFB);
-    waitReceivedACK();
-}
+    void waitReceivedACK()
+    {
+        // ACKSTAT contains whether the ACK signal from the receiving side has been received.
+        // Received at 0. 
+        // Not received at 1.
+        while (SSP1CON2bits.ACKSTAT == 1){}
+        return; 
+    }
+//} I2C Protocol
 
 void SHT31Protocol(unsigned short *row_data)//16bit 2data in.
 {
@@ -274,21 +267,34 @@ void convertNumber(unsigned char number,unsigned char *result,unsigned int start
     return;
 }
 
-void LCD1602AProtocol(unsigned char type,unsigned char data)
+void i2c1602A(unsigned char type,unsigned char data)
 {
-    //start condition
     sendStartCondition();
     
     //address
     send8bitData(0x27<<1 | write);
     waitReceivedACK();
     
+    unsigned char latch = 0x00;
+
     //4bit upper data
-    write1602AFormatByte(type | (data&0xF0) | 0x08);
-    //4bit lower data
-    write1602AFormatByte(type | ((data<<4)&0xF0) | 0x08);
+    latch = type | (data&0xF0) | 0x08;
+    send8bitData(latch);
+    waitReceivedACK();
+    send8bitData(latch | 0x04);
+    waitReceivedACK();
+    send8bitData(latch & 0xFB);
+    waitReceivedACK();
     
-    //stop condition
+    latch = type | ((data<<4)&0xF0) | 0x08;
+    //4bit lower data
+    send8bitData(latch);
+    waitReceivedACK();
+    send8bitData(latch | 0x04);
+    waitReceivedACK();
+    send8bitData(latch & 0xFB);
+    waitReceivedACK();
+    
     createStopCondition();
 
     return;
@@ -296,27 +302,27 @@ void LCD1602AProtocol(unsigned char type,unsigned char data)
 
 void lcdInit()
 {
-    LCD1602AProtocol(command,0x33);
+    i2c1602A(command,0x33);
     __delay_ms(5);
-    LCD1602AProtocol(command,0x32);
+    i2c1602A(command,0x32);
     __delay_ms(1);
-    LCD1602AProtocol(command,0x06);
+    i2c1602A(command,0x06);
     __delay_ms(1);
-    LCD1602AProtocol(command,0x0C);
+    i2c1602A(command,0x0C);
     __delay_ms(1);
-    LCD1602AProtocol(command,0x28);
+    i2c1602A(command,0x28);
     __delay_ms(1);
-    LCD1602AProtocol(command,0x01);
+    i2c1602A(command,0x01);
     __delay_ms(1);
 }
 
 void showMessage(const char* message,unsigned char line_address,int last_index)
 {
-    LCD1602AProtocol(command,line_address);
+    i2c1602A(command,line_address);
     int i=0;
     while(i < last_index+1)
     {
-        LCD1602AProtocol(data,message[i]);
+        i2c1602A(data,message[i]);
         i++;
     }
 }
