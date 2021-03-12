@@ -34,7 +34,6 @@
 #include <xc.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h>
 #define _XTAL_FREQ  8000000
 
 enum LINE 
@@ -75,22 +74,28 @@ enum number
     fifteen = 0x46
 };
 
-void createStartCondition()
+void sendStartCondition()
 {
+    // When SEN is set to 1, the start condition generation starts.
+    // Automatically becomes 0 when transmission is completed.
     SSP1CON2bits.SEN = 1;
-    while(SSPCON2bits.SEN){}
+    while(SSPCON2bits.SEN == 1){}
     return;
 }
 
 void createStopCondition()
 {
+    // When PEN is set to 1, the stop condition generation starts.
+    // Automatically becomes 0 when transmission is completed.
     SSP1CON2bits.PEN = 1;
-    while(SSP1CON2bits.PEN){}
+    while(SSP1CON2bits.PEN == 1){}
     return;
 }
 
 void send8bitData(unsigned char data)
 {
+    // If you put data in SSP1BUF, it will be sent automatically.
+    // When the transmission is completed, SSP1IF becomes 1.
     SSP1IF = 0;
     SSP1BUF = data;
     while(SSP1IF == 0){}
@@ -100,32 +105,42 @@ void send8bitData(unsigned char data)
 
 unsigned char receive8bitData()
 {
+    // Data reception starts when RCEN is set to 1.
+    // RCEN becomes 0 when data reception is completed.
+    // Received data is saved in SSP1BUF.
     SSP1CON2bits.RCEN = 1;
     while(SSP1CON2bits.RCEN == 1){}
-    unsigned char data = SSP1BUF;
 
-    return data;
+    return SSP1BUF;
 }
 
 void waitSendACK()
 {
+    // When ACKDT is set to 0, the generation of ACK signal is set.
+    // By setting ACKEN to 1, the signal is transmitted according to the ACKDT setting.
+    // ACKEN automatically becomes 0 when the signal transmission is completed.
     SSP1CON2bits.ACKDT = 0;
     SSP1CON2bits.ACKEN = 1;
-    while(SSP1CON2bits.ACKEN== 1){}
+    while(SSP1CON2bits.ACKEN == 1){}
     return;
 }
 
 void waitSendNACK()
 {
+    // When ACKDT is set to 1, the generation of NACK signal is set.
+    // By setting ACKEN to 1, the signal is transmitted according to the ACKDT setting.
+    // ACKEN automatically becomes 0 when the signal transmission is completed.
     SSP1CON2bits.ACKDT = 1;
     SSP1CON2bits.ACKEN = 1;
-    while(SSP1CON2bits.ACKEN== 1){}
+    while(SSP1CON2bits.ACKEN == 1){}
     return;
 }
 
 void waitReceivedACK()
 {
-    // 0:received 1:not_recieved
+    // ACKSTAT contains whether the ACK signal from the receiving side has been received.
+    // Received at 0. 
+    // Not received at 1.
     while (SSP1CON2bits.ACKSTAT == 1){}
     return; 
 }
@@ -143,7 +158,7 @@ void write1602AFormatByte(unsigned char data)
 void SHT31Protocol(unsigned short *row_data)//16bit 2data in.
 {
     //start condition
-    createStartCondition();
+    sendStartCondition();
 
     //address
     send8bitData(0x45<<1 | write);
@@ -161,7 +176,7 @@ void SHT31Protocol(unsigned short *row_data)//16bit 2data in.
     createStopCondition();
 
     //start condition
-    createStartCondition();
+    sendStartCondition();
     
     // address
     send8bitData(0x45<<1 | read);
@@ -262,7 +277,7 @@ void convertNumber(unsigned char number,unsigned char *result,unsigned int start
 void LCD1602AProtocol(unsigned char type,unsigned char data)
 {
     //start condition
-    createStartCondition();
+    sendStartCondition();
     
     //address
     send8bitData(0x27<<1 | write);
@@ -334,7 +349,7 @@ int main(int argc, char** argv)
     status[4] = 0x20;
     status[7] = 0x25;
 
-    while(true)
+    while(1)
     {
         SHT31Protocol(temp_humi);
         
