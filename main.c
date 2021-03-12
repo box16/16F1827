@@ -85,7 +85,7 @@ enum number
         return;
     }
 
-    void createStopCondition()
+    void sendStopCondition()
     {
         // When PEN is set to 1, the stop condition generation starts.
         // Automatically becomes 0 when transmission is completed.
@@ -178,7 +178,7 @@ enum number
         send8bitData(latch & 0xFB);
         waitReceivedACK();
         
-        createStopCondition();
+        sendStopCondition();
 
         return;
     }
@@ -213,76 +213,70 @@ enum number
 //} 1602A
 
 
-void SHT31Protocol(unsigned short *row_data)//16bit 2data in.
+void SHT31Protocol(unsigned short *temp_humi)
 {
-    //start condition
     sendStartCondition();
 
     //address
     send8bitData(0x45<<1 | write);
     waitReceivedACK();
 
-    //command
+    //Clock stretch
+    //On : 0x2C 
+    //Off : 0x24
     send8bitData(0x2C);
     waitReceivedACK();
 
-    //command
+    //Repeat accuracy
+    //6 pattern
     send8bitData(0x06);
     waitReceivedACK();
 
-    //stop condition
-    createStopCondition();
+    sendStopCondition();
 
-    //start condition
     sendStartCondition();
     
     // address
     send8bitData(0x45<<1 | read);
     waitReceivedACK();
 
-    //receive temp 16bit
-    row_data[0] = 0;
-    row_data[0] |= receive8bitData();
-    row_data[0] = row_data[0]<<8;
+    //Receives 16 bits of temperature data.
+    temp_humi[0] = 0;
+    temp_humi[0] |= receive8bitData() << 8;
     waitSendACK();
-    row_data[0] |= receive8bitData();
+    temp_humi[0] |= receive8bitData();
     waitSendACK();
 
     //receive check sum
     receive8bitData();
     waitSendACK();
 
-    //receive humi 16bit
-    row_data[1] = 0;
-    row_data[1] |= receive8bitData();
-    row_data[1] = row_data[1]<<8;
+    //Receives 16 bits of humidity data.
+    temp_humi[1] = 0;
+    temp_humi[1] |= receive8bitData() << 8;
     waitSendACK();
-    row_data[1] |= receive8bitData();
+    temp_humi[1] |= receive8bitData();
     waitSendACK();
 
     //receive check sum
     receive8bitData();
     waitSendNACK();
 
-    //stop condition
-    createStopCondition();
+    sendStopCondition();
     return;
 }
 
 unsigned short calcDiv(unsigned short coef,unsigned short row_data)
 {
-    unsigned short current = coef;
-    unsigned short i=0;
+    // Calculate -> coef*row_data/(2^16-1)
     unsigned short result = 0;
-    while(i<16)
+
+    for (unsigned char i=0; i<16; i++)
     {
-        current = current >> 1;
-        if((row_data<<i) & 0x8000)
-        {
-            result += current;
-        }
-        i++;
+        coef = coef >> 1;
+        if((row_data<<i) & 0x8000) result += coef;
     }
+
     return result;
 }
 
@@ -353,25 +347,27 @@ int main(int argc, char** argv)
     lcdInit();
 
     unsigned short temp_humi[2] = {};
-    unsigned char temp = 0x00;
+    char temp = 0x00;
     unsigned char humi = 0x00;
-    // 16'C 22%
-    unsigned char status[8] = {};
-    status[2] = 0xDF;
-    status[3] = 0x43;
-    status[4] = 0x20;
-    status[7] = 0x25;
+    
+    // Display exsample → |2|0|'|C| |5|0|%| 
+    unsigned char display_char[8] = {};
+    display_char[2] = 0xDF;//'
+    display_char[3] = 0x43;//C
+    display_char[4] = 0x20;//_(space)
+    display_char[7] = 0x25;//%
 
     while(1)
     {
         SHT31Protocol(temp_humi);
         
-        temp = -45 + calcDiv(175,temp_humi[0]);
-        convertNumber(temp,status,0);        
-        humi = calcDiv(100,temp_humi[1]);
-        convertNumber(humi,status,5);
+        temp = -45 + (char)calcDiv(175,temp_humi[0]);
+        convertNumber(temp,display_char,0);        
+        
+        humi = (unsigned)calcDiv(100,temp_humi[1]);
+        convertNumber(humi,display_char,5);
 
-        showMessage(status,first,7);
+        showMessage(display_char,first,7);
         
         __delay_ms(10000);
         lcdInit();
