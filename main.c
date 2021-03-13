@@ -298,7 +298,7 @@ void convert2DigitNumber(unsigned char number,
                          const unsigned int start_index)
 {
     unsigned char carry_10 = 0x00;
-    while(number > 10)
+    while(number >= 10)
     {
         number -= 10;
         carry_10++;
@@ -309,14 +309,81 @@ void convert2DigitNumber(unsigned char number,
     return;
 }
 
+void convert4DigitNumber(unsigned short number,
+                         unsigned char *result,
+                         const unsigned int start_index)
+{
+    unsigned char carry_1000 = 0x00;
+    unsigned char carry_100 = 0x00;
+    unsigned char carry_10 = 0x00;
+    while(number >= 1000)
+    {
+        number -= 1000;
+        carry_1000++;
+    }
+    while(number >= 100)
+    {
+        number -= 100;
+        carry_100++;
+    }
+    while(number >= 10)
+    {
+        number -= 10;
+        carry_10++;
+    }
+
+    result[start_index] = convertNumberto1602ACode(carry_1000);
+    result[start_index+1] = convertNumberto1602ACode(carry_100);
+    result[start_index+2] = convertNumberto1602ACode(carry_10);
+    result[start_index+3] = convertNumberto1602ACode(number);
+    return;
+}
+
+unsigned char buff = 0x00;
+unsigned char interrupt_flag = 0x00;
+
+unsigned char __interrupt() InterReceiver()
+{
+    if (RCIF == 1) {
+        buff = 0x00;
+        buff = RCREG;
+        interrupt_flag = 1;
+        RCIF = 0;
+        showMessage("interrupt",second,8);
+    }
+}
+
+void eusartMHZ19C()
+{   
+    // send
+    TXIF = 0;
+    while (TXIF==0);
+    TXREG = 0xFF;
+    while (TXIF==0);
+    TXREG = 0x01;
+    while (TXIF==0);
+    TXREG = 0x86;
+    while (TXIF==0);
+    TXREG = 0x00;
+    while (TXIF==0);
+    TXREG = 0x00;
+    while (TXIF==0);
+    TXREG = 0x00;
+    while (TXIF==0);
+    TXREG = 0x00;
+    while (TXIF==0);
+    TXREG = 0x00;
+    while (TXIF==0);
+    TXREG = 0x79;
+}
 
 int main(int argc, char** argv) 
 {
     OSCCON = 0b01110010; // CLOCK : 8MHz
     ANSELA = 0x00;
-    ANSELB = 0x00;
+    ANSELB = 0x04;
     TRISA  = 0x00;
-    TRISB  = 0x12;// I2C1 SCL:RB4 SDA:RB1
+    TRISB  = 0x16;// I2C1 SCL:RB4 SDA:RB1 EUSART RX:RB2
     PORTA = 0x00;
     PORTB = 0x00;
     
@@ -324,34 +391,58 @@ int main(int argc, char** argv)
     SSP1CON1 = 0x28;
     SSP1CON3 = 0x00;
     SSP1ADD = 0x13; //1<10kHz> = ((byte+1)*4)/80<8MHz>
+
+    RCIE = 1;
+    PEIE = 1;
+    GIE = 1;
+
+    TXCKSEL = 1;
+    RXDTSEL = 1;
+    TXSTA = 0x24;
+    RCSTA = 0x90;
+    BRG16 = 0;
+    SPBRG = 51;// baud rate 9600
+
     
     __delay_ms(1000);
     lcdInit();
 
     unsigned short temp_humi[2] = {};
+    unsigned short co2 = 0x0000;
     char temp = 0x00;
     unsigned char humi = 0x00;
     
-    // Display exsample -> |2|0|'|C| |5|0|%| 
-    unsigned char display_char[8] = {};
-    display_char[2] = 0xDF;//'
-    display_char[3] = 0x43;//C
-    display_char[4] = 0x20;//_(space)
-    display_char[7] = 0x25;//%
+    // Display example -> |2|0|'|C| |5|0|%| 
+    unsigned char display_char_first[8] = {};
+    display_char_first[2] = 0xDF;//'
+    display_char_first[3] = 0x43;//C
+    display_char_first[4] = 0x20;//_(space)
+    display_char_first[7] = 0x25;//%
 
+    // Display example -> |1|5|0|0|p|p|m|
+    unsigned char display_char_second[7] = {};
+    display_char_second[4] = 0x70;//p
+    display_char_second[5] = 0x70;//p
+    display_char_second[6] = 0x6D;//m
+    
     while(1)
     {
         i2cSHT31(temp_humi);
-        
+        eusartMHZ19C();
+
         temp = -45 + (char)calcDiv(175,temp_humi[0]);
-        convert2DigitNumber(temp,display_char,0);        
+        convert2DigitNumber(temp,display_char_first,0);        
         
         humi = (unsigned char)calcDiv(100,temp_humi[1]);
-        convert2DigitNumber(humi,display_char,5);
+        convert2DigitNumber(humi,display_char_first,5);
 
-        showMessage(display_char,first,7);
+        convert4DigitNumber(buff,display_char_second,0);
+
+        showMessage(display_char_first,first,7);
+        showMessage(display_char_second,second,6);
         
         __delay_ms(10000);
         lcdInit();
+        __delay_ms(1000);
     }
 }
