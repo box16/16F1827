@@ -339,21 +339,7 @@ void convert4DigitNumber(unsigned short number,
     return;
 }
 
-unsigned char buff = 0x00;
-unsigned char interrupt_flag = 0x00;
-
-unsigned char __interrupt() InterReceiver()
-{
-    if (RCIF == 1) {
-        buff = 0x00;
-        buff = RCREG;
-        interrupt_flag = 1;
-        RCIF = 0;
-        showMessage("interrupt",second,8);
-    }
-}
-
-void eusartMHZ19C()
+unsigned short eusartMHZ19C()
 {   
     // send
     TXIF = 0;
@@ -375,6 +361,31 @@ void eusartMHZ19C()
     TXREG = 0x00;
     while (TXIF==0);
     TXREG = 0x79;
+
+    unsigned short co2 = 0x0000;
+    // send
+    RCIF = 0;
+    while (RCIF==0);
+    // 0xFF
+    while (RCIF==0);
+    // 0x86
+    while (RCIF==0);
+    co2 = RCREG;
+    co2 = co2 << 8;
+    while (RCIF==0);
+    co2 |= RCREG;
+    while (RCIF==0);
+    // -
+    while (RCIF==0);
+    // -
+    while (RCIF==0);
+    // -
+    while (RCIF==0);
+    // -
+    while (RCIF==0);
+    // checksum
+
+    return co2;
 }
 
 int main(int argc, char** argv) 
@@ -428,7 +439,7 @@ int main(int argc, char** argv)
     while(1)
     {
         i2cSHT31(temp_humi);
-        eusartMHZ19C();
+        co2 = eusartMHZ19C();
 
         temp = -45 + (char)calcDiv(175,temp_humi[0]);
         convert2DigitNumber(temp,display_char_first,0);        
@@ -436,7 +447,7 @@ int main(int argc, char** argv)
         humi = (unsigned char)calcDiv(100,temp_humi[1]);
         convert2DigitNumber(humi,display_char_first,5);
 
-        convert4DigitNumber(buff,display_char_second,0);
+        convert4DigitNumber(co2,display_char_second,0);
 
         showMessage(display_char_first,first,7);
         showMessage(display_char_second,second,6);
