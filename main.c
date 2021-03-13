@@ -339,7 +339,30 @@ void convert4DigitNumber(unsigned short number,
     return;
 }
 
-unsigned short eusartMHZ19C()
+
+unsigned short co2 = 0x0000;
+unsigned char counter = 0x00;
+void __interrupt() readMHZ19C()
+{
+    unsigned char buff = 0x00;
+    if(RCIF==1){
+        buff = RCREG;
+        if(buff == 0xFF){
+            counter=0x00;
+        }else{
+            counter++;
+        }
+
+        if(counter==2){
+            co2 = buff << 8;
+        }else if(counter==3){
+            co2 |= buff;
+        }
+        RCIF = 0;
+    }
+}
+
+void eusartMHZ19C()
 {   
     // send
     TXIF = 0;
@@ -361,38 +384,13 @@ unsigned short eusartMHZ19C()
     TXREG = 0x00;
     while (TXIF==0);
     TXREG = 0x79;
-
-    unsigned short co2 = 0x0000;
-    // send
-    RCIF = 0;
-    while (RCIF==0);
-    // 0xFF
-    while (RCIF==0);
-    // 0x86
-    while (RCIF==0);
-    co2 = RCREG;
-    co2 = co2 << 8;
-    while (RCIF==0);
-    co2 |= RCREG;
-    while (RCIF==0);
-    // -
-    while (RCIF==0);
-    // -
-    while (RCIF==0);
-    // -
-    while (RCIF==0);
-    // -
-    while (RCIF==0);
-    // checksum
-
-    return co2;
 }
 
 int main(int argc, char** argv) 
 {
     OSCCON = 0b01110010; // CLOCK : 8MHz
     ANSELA = 0x00;
-    ANSELB = 0x04;
+    ANSELB = 0x00;
     TRISA  = 0x00;
     TRISB  = 0x16;// I2C1 SCL:RB4 SDA:RB1 EUSART RX:RB2
     PORTA = 0x00;
@@ -419,7 +417,6 @@ int main(int argc, char** argv)
     lcdInit();
 
     unsigned short temp_humi[2] = {};
-    unsigned short co2 = 0x0000;
     char temp = 0x00;
     unsigned char humi = 0x00;
     
@@ -435,12 +432,13 @@ int main(int argc, char** argv)
     display_char_second[4] = 0x70;//p
     display_char_second[5] = 0x70;//p
     display_char_second[6] = 0x6D;//m
+
     
     while(1)
     {
         i2cSHT31(temp_humi);
-        co2 = eusartMHZ19C();
-
+        eusartMHZ19C();
+        
         temp = -45 + (char)calcDiv(175,temp_humi[0]);
         convert2DigitNumber(temp,display_char_first,0);        
         
@@ -452,7 +450,7 @@ int main(int argc, char** argv)
         showMessage(display_char_first,first,7);
         showMessage(display_char_second,second,6);
         
-        __delay_ms(10000);
+        __delay_ms(5000);
         lcdInit();
         __delay_ms(1000);
     }
